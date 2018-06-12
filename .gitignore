@@ -1,0 +1,5 @@
+/build/
+/dist/
+/torchext.egg-info/
+__pycache__/
+*.swp
