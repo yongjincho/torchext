@@ -139,7 +139,7 @@ class Estimator:
                 self.model.eval()
                 predictions, loss = self.model(**batch)
 
-            # This values will be averaged the end of evaluation.
+            # These values will be averaged at the end of evaluation.
             stats.add("loss", loss.item())
             metrics = self.evaluate_hook(step, predictions, **batch)
             if metrics:

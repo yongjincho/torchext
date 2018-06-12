@@ -5,11 +5,12 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="torchext",
-    version="0.0.1",
+    version="0.0.2",
     packages=setuptools.find_packages(),
 
     install_requires=[
-        "tensorboardX"
+        "tensorboardX",
+        "PyYAML",
     ],
 
     ptrhon_requires=">=3.5",

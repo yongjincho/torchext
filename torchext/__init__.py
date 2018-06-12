@@ -11,4 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-__all__ = ["config", "utils", "model", "dataset"]
+from . import config
+from . import utils
+from . import data
+from . import estimator
+
+__all__ = ["config", "utils", "data", "estimator"]
