@@ -60,7 +60,7 @@ class TrainingStats:
         return 1 / sec_per_step
 
 
-class Estimator:
+class Model:
     def __init__(self, model, optimizer, model_dir):
         self.model = model
         if torch.cuda.is_available():

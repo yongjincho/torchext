@@ -14,6 +14,6 @@
 from . import config
 from . import utils
 from . import data
-from . import estimator
+from . import model
 
-__all__ = ["config", "utils", "data", "estimator"]
+__all__ = ["config", "utils", "data", "model"]
