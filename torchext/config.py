@@ -13,15 +13,7 @@
 # limitations under the License.
 
 # Default system configurations
-train_steps = 0
-eval_steps = 10
-
-summary_interval = 100
-evaluation_interval = 1000
-checkpoint_interval = 1000
-
-keep_checkpoint_max = 10
-
+import logging as _logging
 
 
 _config_file_name = "config.yml"
@@ -39,10 +31,9 @@ def _save(model_dir):
 
 
 def _update(key, value):
-    import logging
     g = globals()
     if key in g and g[key] != value:
-        logging.info("The original value of configuration '{}' is '{}', but it is replaced by '{}'.".format(key, g[key], value))
+        _logging.info("The original value of configuration '{}' is '{}', but it is replaced by '{}'.".format(key, g[key], value))
     g[key] = value
 
 
@@ -51,16 +42,16 @@ def _dict():
 
 
 def _print():
-    import logging
-    logging.info("------------------- All configurations --------------------")
+    _logging.info("------------------- All configurations --------------------")
     kv = _dict()
     for k in sorted(kv.keys()):
-        logging.info("%s = %s", k, kv[k])
-    logging.info("------------------------------------------------------------")
+        _logging.info("%s = %s", k, kv[k])
+    _logging.info("------------------------------------------------------------")
 
 
-def _load(model_dir, configs, initialize=False):
-    import os, yaml
+def _load(model_dir, configs, initialize=False, print_=True):
+    import os
+    import yaml
 
     saved_config_file = os.path.join(model_dir, _config_file_name)
     if os.path.exists(saved_config_file):
@@ -72,8 +63,8 @@ def _load(model_dir, configs, initialize=False):
         kv = [s.strip() for s in cfg.split("=", 1)]
         if len(kv) == 1:
             if not os.path.exists(cfg):
-                raise ValueError("The configuration file {} doesn't exist.".format(cfg))
-            obj = yaml.load(open(cfg).read())
+                raise ValueError("The configuration file doesn't exist; {}".format(cfg))
+            obj = yaml.load(open(cfg).read(), Loader=yaml.FullLoader)
             for k, v in obj.items():
                 _update(k, v)
         else:
@@ -84,8 +75,17 @@ def _load(model_dir, configs, initialize=False):
                 try:
                     v = float(v)
                 except ValueError:
-                    pass
+                    v_norm = v.lower().strip()
+                    if v_norm == "true":
+                        v = True
+                    elif v_norm == "false":
+                        v = False
+                    elif v_norm == "null":
+                        v = None
             _update(k, v)
 
     if not os.path.exists(saved_config_file) and initialize:
         _save(model_dir)
+
+    if print_:
+        _print()

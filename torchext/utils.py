@@ -11,11 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import glob
 import os
+import glob
 import logging
-import time
 import argparse
+import subprocess
 
 import torch
 
@@ -49,40 +49,55 @@ def load_checkpoint(model_dir):
     return torch.load(latest_file)
 
 
-def range_step(start, end=None):
-    step = start
-    while True:
-        if end and step > end:
-            raise StopIteration
-        yield step
-        step += 1
-
-
-def log_level_value(log_level_string):
-    """Convert string valued log level to integer"""
-    if log_level_string == "WARN":
-        return logging.WARN
-    elif log_level_string == "INFO":
-        return logging.INFO
-    elif log_level_string == "DEBUG":
-        return logging.DEBUG
-    else:
-        raise ValueError("Unknown log level: {}".format(log_level_string))
-
-
-def parse_args(description=None):
+def get_argument_parser(description=None):
     parser = argparse.ArgumentParser(description)
     parser.add_argument("-m", "--model_dir", type=str, required=True,
             help="The directory for a trained model is saved.")
-    parser.add_argument("-c", "--configs", default=[], nargs="*",
+    parser.add_argument("-c", "--conf", dest="configs", default=[], nargs="*",
             help="A list of configuration items. "
                  "An item is a file path or a 'key=value' formatted string. "
                  "The type of a value is determined by applying int(), float(), and str() "
                  "to it sequencially.")
-    parser.add_argument("--log", default="INFO", help="WARN | INFO (default) | DEBUG")
+    return parser
+
+
+def parse_args(description=None):
+    parser = get_argument_parser(description)
     args = parser.parse_args()
-
-    logging.basicConfig(format="%(levelname)s\t%(asctime)s\t%(message)s",
-                        level=log_level_value(args.log))
-
     return args
+
+
+def check_git_hash(model_dir):
+    source_dir = os.getcwd()
+    if not os.path.exists(os.path.join(source_dir, ".git")):
+        logging.warn('"%s" is not a git repository. Therefore, hash value comparison will be skipped.',
+                model_dir)
+        return
+
+    cur_hash = subprocess.getoutput("git rev-parse HEAD")
+
+    path = os.path.join(model_dir, "githash")
+    if os.path.exists(path):
+        saved_hash = open(path).read()
+        if saved_hash != cur_hash:
+            logging.warn("git hash values are different. {}(saved) != {}(current)".format(
+                saved_hash[:8], cur_hash[:8]))
+    else:
+        open(path, "w").write(cur_hash)
+
+
+def redirect_log_to_file(model_dir, level=logging.INFO, filename="train.log"):
+    logger = logging.getLogger()
+    logger.setLevel(level)
+
+    formatter = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+    h = logging.StreamHandler()
+    h.setFormatter(formatter)
+    logger.addHandler(h)
+
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+    h = logging.FileHandler(os.path.join(model_dir, filename))
+    h.setFormatter(formatter)
+    logger.addHandler(h)

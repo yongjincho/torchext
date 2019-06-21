@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="torchext",
-    version="0.0.3",
+    version="0.0.4",
     packages=setuptools.find_packages(),
 
     install_requires=[

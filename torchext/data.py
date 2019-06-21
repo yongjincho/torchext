@@ -13,17 +13,19 @@
 # limitations under the License.
 import re
 import sys
-import csv
+import heapq
 import random
 import logging
+import threading
+import multiprocessing as mp
 
 
 class Dataset:
     def __iter__(self):
         raise NotImplemented
 
-    def map(self, map_fn):
-        return MappedDataset(self, map_fn)
+    def map(self, map_fn, num_workers=2):
+        return MappedDataset(self, map_fn, num_workers)
 
     def filter(self, filter_fn):
         return FilteredDataset(self, filter_fn)
@@ -41,14 +43,66 @@ class Dataset:
         return BucketDataset(self, boundaries, batch_sizes, length_fn, collate_fn)
 
 
+class Result:
+    def __init__(self, job_id, data):
+        self.job_id = job_id
+        self.data = data
+
+    def __lt__(self, other):
+        return self.job_id < other.job_id
+
+    def __eq__(self, other):
+        return self.job_id == other.job_id
+
+
+class Worker(mp.Process):
+    def __init__(self, job_queue, result_queue, target):
+        super().__init__(daemon=True)
+        self.job_queue = job_queue
+        self.result_queue = result_queue
+        self.target = target
+
+    def run(self):
+        while True:
+            job_id, job = self.job_queue.get()
+            data = self.target(job)
+            self.result_queue.put(Result(job_id, data))
+
+
 class MappedDataset(Dataset):
-    def __init__(self, source, map_fn):
+    def __init__(self, source, map_fn, num_workers):
         self.source = source
-        self.map_fn = map_fn
+
+        self.job_queue = mp.Queue(maxsize=num_workers * 100)
+        self.result_queue = mp.Queue(maxsize=num_workers * 100)
+
+        self.job_assigner = threading.Thread(target=self.assign_jobs, daemon=True)
+
+        self.workers = []
+        for _ in range(num_workers):
+            w = Worker(self.job_queue, self.result_queue, map_fn)
+            self.workers.append(w)
+
+        self.results = [] # To sort the result by job id.
+
+        for worker in self.workers:
+            worker.start()
+        self.job_assigner.start()
+
+    def assign_jobs(self):
+        for i, sample in enumerate(self.source):
+            self.job_queue.put((i, sample))
 
     def __iter__(self):
-        for sample in self.source:
-            yield self.map_fn(sample)
+        next_job_id = 0
+        while True:
+            if self.results and self.results[0].job_id == next_job_id:
+                result = heapq.heappop(self.results)
+                yield result.data
+                next_job_id += 1
+            else:
+                result = self.result_queue.get()
+                heapq.heappush(self.results, result)
 
 
 class FilteredDataset(Dataset):
@@ -114,7 +168,7 @@ class BatchedDataset(Dataset):
 
 
 class BucketDataset(Dataset):
-    """Tensor2Tensor's bucketing method"""
+    """tensor2tensor's bucketing method"""
 
     def __init__(self, source, boundaries, batch_sizes, length_fn, collate_fn):
         self.source = source
@@ -154,13 +208,3 @@ class TextLineDataset(Dataset):
             f = open(self.filename)
         for line in f:
             yield self.newline_pattern.sub('', line)
-
-
-class CsvDataset(Dataset):
-    def __init__(self, filename):
-        self.filename = filename
-
-    def __iter__(self):
-        reader = csv.DictReader(open(self.filename))
-        for row in reader:
-            yield row
