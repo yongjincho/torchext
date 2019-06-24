@@ -16,7 +16,6 @@ import sys
 import heapq
 import random
 import logging
-import threading
 import multiprocessing as mp
 
 
@@ -64,9 +63,13 @@ class Worker(mp.Process):
 
     def run(self):
         while True:
-            job_id, job = self.job_queue.get()
+            job = self.job_queue.get()
+            if job is None:
+                break
+            job_id, job = job
             data = self.target(job)
             self.result_queue.put(Result(job_id, data))
+        self.result_queue.put(None)
 
 
 class MappedDataset(Dataset):
@@ -76,7 +79,7 @@ class MappedDataset(Dataset):
         self.job_queue = mp.Queue(maxsize=num_workers * 100)
         self.result_queue = mp.Queue(maxsize=num_workers * 100)
 
-        self.job_assigner = threading.Thread(target=self.assign_jobs, daemon=True)
+        self.job_assigner = mp.Process(target=self.assign_jobs, daemon=True)
 
         self.workers = []
         for _ in range(num_workers):
@@ -93,16 +96,24 @@ class MappedDataset(Dataset):
         for i, sample in enumerate(self.source):
             self.job_queue.put((i, sample))
 
+        for _ in range(len(self.workers)):
+            self.job_queue.put(None)
+
     def __iter__(self):
         next_job_id = 0
-        while True:
+        end_count = 0
+        while end_count < len(self.workers):
             if self.results and self.results[0].job_id == next_job_id:
                 result = heapq.heappop(self.results)
                 yield result.data
                 next_job_id += 1
             else:
                 result = self.result_queue.get()
-                heapq.heappush(self.results, result)
+                if result is None:
+                    end_count += 1
+                else:
+                    heapq.heappush(self.results, result)
+        assert len(self.results) == 0
 
 
 class FilteredDataset(Dataset):
