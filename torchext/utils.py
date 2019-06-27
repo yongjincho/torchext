@@ -40,13 +40,13 @@ def save_checkpoint(model_dir, step, states, keep_max=None):
             os.remove(filepath)
 
 
-def load_checkpoint(model_dir):
+def load_checkpoint(model_dir, map_location=None):
     filepaths = get_checkpoint_filepaths(model_dir)
     if not filepaths:
         return None
     latest_file = filepaths[-1]
     logging.info("Loading the checkpoint file: {}".format(latest_file))
-    return torch.load(latest_file)
+    return torch.load(latest_file, map_location=map_location)
 
 
 def get_argument_parser(description=None):
